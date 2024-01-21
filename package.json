@@ -22,7 +22,7 @@
   "homepage": "https://github.com/hellarcore/hellar-network-deploy#readme",
   "dependencies": {
     "@hellarcore/bls": "~1.3.0",
-    "@hellarcore/hapi-client": "^0.25.15",
+    "@hellarcore/hapi-client": "^1.0.0.15",
     "@hellarcore/hellarcore-lib": "^0.20.10",
     "@hellarcore/hellard-rpc": "^18.2.0",
     "@hellarcore/wallet-lib": "^7.25.15",
