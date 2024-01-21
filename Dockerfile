@@ -1,6 +1,6 @@
 FROM ubuntu:22.04
 
-LABEL maintainer="Hellar Developers <dev@hellar.org>"
+LABEL maintainer="Hellar Developers <dev@hellar.io>"
 LABEL description="Hellar Network Deployment Tool"
 
 # Install build utils and Firefox deps

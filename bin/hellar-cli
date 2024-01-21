@@ -46,6 +46,9 @@ openvpn_wait_for_connect
 
 NETWORK_ARG=""
 case ${NETWORK} in
+    mainnet)
+        NETWORK_ARG="-mainnet=${NETWORK_MAINNET_NAME}"
+    ;;
     devnet)
         NETWORK_ARG="-devnet=${NETWORK_DEVNET_NAME}"
     ;;
