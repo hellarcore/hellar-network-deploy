@@ -1,0 +1,151 @@
+---
+
+- name: Create hellard group
+  ansible.builtin.group:
+    name: '{{ hellard_group }}'
+
+- name: Create hellard user
+  ansible.builtin.user:
+    name: '{{ hellard_user }}'
+    comment: 'Hellar user'
+    group: '{{ hellard_group }}'
+    home: '{{ hellard_home }}'
+    create_home: true
+    umask: '0002'
+  register: hellar_user
+
+- name: Create .hellarcore directory for hellar
+  ansible.builtin.file:
+    path: '{{ hellard_home }}/.hellarcore'
+    state: directory
+    mode: "0755"
+    owner: '{{ hellard_user }}'
+    group: '{{ hellard_group }}'
+
+- name: Write hellar.conf file in /etc/
+  ansible.builtin.template:
+    src: hellar.conf.j2
+    dest: /etc/hellar.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure users for hellar-cli
+  ansible.builtin.include_role:
+    name: hellar_cli
+    tasks_from: configure_users
+  vars:
+    hellard_user_dict:
+      user: '{{ hellard_user }}'
+      group: '{{ hellard_group }}'
+      dir: '{{ hellard_home }}'
+    users: '{{ system_users + [hellard_user_dict] }}'
+
+- name: Create hellarcore docker-compose dir
+  ansible.builtin.file:
+    path: '{{ hellard_compose_path }}'
+    state: directory
+    mode: "0755"
+    recurse: true
+
+- name: Copy hellarcore docker-compose file
+  ansible.builtin.template:
+    src: '{{ item }}.j2'
+    dest: '{{ hellard_compose_path }}/{{ item }}'
+    mode: "0644"
+  loop:
+    - docker-compose.yml
+    - .env
+
+- name: Configure log rotation
+  ansible.builtin.include_role:
+    name: arillso.logrotate
+  vars:
+    logrotate_use_hourly_rotation: true
+    logrotate_options:
+      - weekly
+      - rotate 4
+      - create
+      - dateext
+      - dateformat -%Y%m%d-%s
+      - su root syslog
+    logrotate_applications:
+      - name: core-logs
+        definitions:
+          - logs:
+              - "{{ hellard_home }}/.hellarcore/{{ hellar_network_name if hellar_network == 'devnet' else 'testnet3' }}/debug.log"
+            options:
+              - rotate 7
+              - daily
+              - maxsize 1G
+              - missingok
+              - notifempty
+              - copytruncate
+              - compress
+              - delaycompress
+
+- name: Set mode to logrotate cron file
+  ansible.builtin.file:
+    path: /etc/cron.daily/logrotate
+    mode: "+x"
+
+- name: Check if wallet exists
+  ansible.builtin.stat:
+    path: "{{ hellard_home }}/.hellarcore/{{ hellar_network_name if hellar_network == 'devnet' else 'testnet3' }}/wallets/{{ wallet_rpc_wallet_faucet }}/wallet.dat"
+  register: wallet_exists
+
+- name: Load wallets on startup
+  ansible.builtin.blockinfile:
+    path: '/etc/hellar.conf'
+    insertafter: '[{{ hellar_network }}]'
+    block: |
+      wallet={{ wallet_rpc_wallet_faucet }}
+      wallet={{ wallet_rpc_wallet_mno }}
+  when: enable_wallet is true and wallet_exists.stat.exists is true
+
+# TODO: why does this always take exactly 30 seconds on first deploy?
+- name: Start hellar core
+  community.docker.docker_compose:
+    project_src: '{{ hellard_compose_path }}'
+    state: present
+    restarted: true
+    pull: true
+    timeout: 30
+
+- name: Wait for rpc to be available
+  ansible.builtin.command: hellar-cli getgovernanceinfo
+  register: task_result
+  until: task_result.rc == 0
+  retries: 50
+  delay: 2
+  changed_when: task_result.rc == 0
+
+# Wallet node
+- name: Create faucet wallet
+  ansible.builtin.command:
+    cmd: hellar-cli createwallet {{ wallet_rpc_wallet_faucet }}
+    creates: "{{ hellard_home }}/.hellarcore/{{ hellar_network_name if hellar_network == 'devnet' else 'testnet3' }}/wallets/{{ wallet_rpc_wallet_faucet }}/wallet.dat"
+  register: create_faucet_wallet_result
+  when: enable_wallet is true
+
+- name: Create mno wallet
+  ansible.builtin.command:
+    cmd: hellar-cli createwallet {{ wallet_rpc_wallet_mno }}
+    creates: "{{ hellard_home }}/.hellarcore/{{ hellar_network_name if hellar_network == 'devnet' else 'testnet3' }}/wallets/{{ wallet_rpc_wallet_mno }}/wallet.dat"
+  register: create_mno_wallet_result
+  when: enable_wallet is true
+
+- name: Load wallets on startup
+  ansible.builtin.blockinfile:
+    path: '/etc/hellar.conf'
+    insertafter: '[{{ hellar_network }}]'
+    block: |
+      wallet={{ wallet_rpc_wallet_faucet }}
+      wallet={{ wallet_rpc_wallet_mno }}
+  when: create_faucet_wallet_result.changed and create_mno_wallet_result.changed
+
+- name: Import faucet privkey
+  ansible.builtin.command: hellar-cli -rpcwallet={{ wallet_rpc_wallet_faucet }} importprivkey {{ faucet_privkey }}
+  register: result
+  when: enable_wallet is true
+  changed_when: result.rc == 0

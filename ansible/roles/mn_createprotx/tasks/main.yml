@@ -1,0 +1,48 @@
+---
+
+# register
+
+- name: Initialize array for created protx
+  ansible.builtin.set_fact:
+    created_protx_list: []
+
+- name: Create provider registration transaction
+  ansible.builtin.include_tasks: createprovidertx.yml
+  vars:
+    masternode: "{{ mnlist[item] }}"
+    masternode_name: "{{ item }}"
+  with_items: '{{ masternode_names }}'
+
+- name: Generate blocks until transactions are confirmed
+  ansible.builtin.include_role:
+    name: generate_blocks
+  vars:
+    generate: confirmations
+    txid_list: "{{ created_protx_list }}"
+    tx_source: "{{ wallet_rpc_wallet_mno }}"
+
+# verify
+
+- name: Initialize array for registered masternodes
+  ansible.builtin.set_fact:
+    registered_masternode_names: []
+
+- name: Get list of ProTx transactions from the wallet
+  ansible.builtin.command: hellar-cli -rpcwallet={{ wallet_rpc_wallet_mno }} protx list wallet true
+  register: get_protx_list_result
+  changed_when: get_protx_list_result.stdout | to_json | length > 0
+
+- name: Get names of registered masternodes
+  ansible.builtin.set_fact:
+    registered_masternode_names: "{{ registered_masternode_names + [item] }}"
+  when: get_protx_list_result.stdout | from_json | json_query("[?state.ownerAddress=='" + mnlist[item].owner.address + "']")
+  with_items: '{{ masternode_names }}'
+
+- name: List of registered masternodes
+  ansible.builtin.debug:
+    var: registered_masternode_names
+
+- name: Fail if masternodes were not registered
+  ansible.builtin.fail:
+    msg: ProTX transactions were not created
+  when: masternode_names | difference(registered_masternode_names)

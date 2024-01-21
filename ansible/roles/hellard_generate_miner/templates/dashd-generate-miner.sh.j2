@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+while true; do
+  hellar-cli generatetoaddress 1 {{ miner_payment_address }}
+
+  {% if hellar_network == "regtest" %}
+  sleep 2.5m
+  {% endif %}
+done

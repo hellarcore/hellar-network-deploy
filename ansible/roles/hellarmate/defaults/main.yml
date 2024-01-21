@@ -1,0 +1,34 @@
+---
+# for development
+
+# One of the following variables must be set
+# hellarmate_branch:   # install hellarmate from a branch
+# hellarmate_version:  # install hellarmate using a specific version
+
+hellarmate_config_dir: '{{ hellarmate_home }}/.hellarmate'
+hellarmate_source_dir: '{{ hellarmate_home }}/platform'
+hellarmate_user: "hellarmate"
+hellarmate_group: "hellarmate"
+hellarmate_api_port: 9000
+hellarmate_platform_enable: true
+hellarmate_platform_hapi_envoy_ssl_provider: self-signed
+hellarmate_platform_hapi_envoy_ssl_provider_config_zerossl_api_key:
+hellarmate_platform_tenderhellar_pprof_enable: false
+hellarmate_platform_hapi_envoy_http_connect_timeout: "0.5s"
+hellarmate_platform_hapi_envoy_http_response_timeout: "15s"
+hellarmate_platform_hapi_envoy_rate_limiter_enabled: true
+hellarmate_platform_hapi_api_docker_deploy_replicas: 1
+hellarmate_platform_drive_tenderhellar_p2p_flush_throttle_timeout: "100ms"
+hellarmate_platform_drive_tenderhellar_p2p_max_packet_msg_payload_size: 10240
+hellarmate_platform_drive_tenderhellar_p2p_send_rate: 5120000
+hellarmate_platform_drive_tenderhellar_p2p_recv_rate: 5120000
+hellarmate_platform_drive_tenderhellar_mempool_size: 5000
+hellarmate_platform_drive_tenderhellar_mempool_max_txs_bytes: 536870912 # 500Mb, default: 1073741824
+hellarmate_platform_drive_tenderhellar_rpc_max_open_connections: 900
+hellarmate_platform_drive_tenderhellar_consensus_peer_gossip_sleep_duration: "100ms"
+hellarmate_platform_drive_tenderhellar_consensus_peer_query_maj23_sleep_duration: "2s"
+# Unsafe params. Use only if you understand what you are doing.
+hellarmate_platform_drive_tenderhellar_consensus_unsafe_override_propose_timeout:
+hellarmate_platform_drive_tenderhellar_consensus_unsafe_override_propose_delta:
+hellarmate_platform_drive_tenderhellar_consensus_unsafe_override_vote_timeout:
+hellarmate_platform_drive_tenderhellar_consensus_unsafe_override_vote_delta:

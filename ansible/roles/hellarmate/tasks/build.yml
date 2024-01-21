@@ -1,0 +1,113 @@
+---
+
+- name: Install system dependencies
+  ansible.builtin.package:
+    name:
+      - cmake
+      - libzmq3-dev
+      - clang
+      - build-essential
+      - libc-dev
+      - libssl-dev
+      - pkg-config
+      - docker-compose-plugin
+    state: present
+  when: hellarmate_platform_enable
+
+- name: Download Rustup
+  ansible.builtin.get_url:
+    url: https://sh.rustup.rs
+    dest: '{{ hellarmate_home }}/rustup.sh'
+    owner: '{{ hellarmate_user }}'
+    group: '{{ hellarmate_group }}'
+    mode: '0755'
+  register: rustup
+  when: hellarmate_platform_enable
+
+- name: Install Rust
+  ansible.builtin.command: '{{ hellarmate_home }}/rustup.sh -y'
+  become: true
+  become_user: hellarmate
+  when: rustup.changed and hellarmate_platform_enable # noqa: no-handler
+  changed_when: true
+
+# TODO: it should work without sourcing cargo env
+- name: Install Rust dependencies
+  ansible.builtin.shell: |
+    . "$HOME/.cargo/env"
+    rustup toolchain install stable
+    rustup target add wasm32-unknown-unknown --toolchain stable
+    cargo install wasm-bindgen-cli@0.2.86
+  become: true
+  become_user: hellarmate
+  args:
+    executable: /bin/bash
+  changed_when: true
+  when: hellarmate_platform_enable
+
+- name: Setup Node.JS and NPM
+  ansible.builtin.include_role:
+    name: geerlingguy.nodejs
+  vars:
+    nodejs_version: "18.x"
+
+- name: Clone hellarmate source
+  become: true
+  become_user: hellarmate
+  ansible.builtin.git:
+    repo: 'https://github.com/hellarcore/platform'
+    dest: '{{ hellarmate_source_dir }}'
+    version: '{{ hellarmate_branch }}'
+    single_branch: true
+    depth: 1
+  register: git
+
+- name: Enable corepack
+  ansible.builtin.shell: |
+    corepack enable
+    yarn --version
+  become: true
+  args:
+    creates: '{{ hellarmate_home }}/.cache/node/corepack'
+    chdir: '{{ hellarmate_source_dir }}'
+
+- name: Install Yarn dependencies
+  ansible.builtin.command: yarn install
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_source_dir }}'
+    creates: '{{ hellarmate_source_dir }}/.yarn/unplugged'
+
+- name: Build sources
+  ansible.builtin.shell: |
+    . "$HOME/.cargo/env"
+    yarn workspace @hellarcore/wasm-dpp build
+    yarn workspace hellar build
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_source_dir }}'
+    executable: /bin/bash
+  when: git.changed # noqa: no-handler
+  changed_when: true
+
+- name: Check if default config is set
+  ansible.builtin.command: "{{ hellarmate_cmd }} config"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_config_result
+  ignore_errors: true
+  changed_when: true
+
+- name: Enable hellarmate helper build
+  ansible.builtin.command: yarn hellarmate config set hellarmate.helper.docker.build.enabled true
+  become: true
+  become_user: hellarmate
+  register: build_hellarmate_helper
+  args:
+    chdir: '{{ hellarmate_source_dir }}'
+  changed_when: build_hellarmate_helper.rc == 0
+  when: hellarmate_config_result.rc == 0

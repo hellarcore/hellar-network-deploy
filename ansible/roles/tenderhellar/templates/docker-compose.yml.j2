@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  tenderhellar:
+    image: {{ tendermint_image }}
+    container_name: tenderhellar
+    restart: always
+    ports:
+      - {{ tendermint_p2p_port }}:{{ tendermint_p2p_port }}
+    volumes:
+      - {{ tenderhellar_compose_path }}/tenderhellar:/tenderhellar

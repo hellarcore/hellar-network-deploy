@@ -1,0 +1,59 @@
+---
+
+- name: Get core container host info
+  community.docker.docker_host_info:
+    containers: true
+    containers_filters:
+      name: '{{ core_container_name }}'
+  register: core_host_info
+
+- name: Get tenderhellar container host info
+  community.docker.docker_host_info:
+    containers: true
+    containers_filters:
+      name: tender
+  register: tenderhellar_host_info
+
+- name: Get drive container host info
+  community.docker.docker_host_info:
+    containers: true
+    containers_filters:
+      name: abci
+  register: drive_host_info
+
+- name: Set container ids for core and tenderhellar
+  ansible.builtin.set_fact:
+    core_container_id: '{{ core_host_info.containers[0].Id if (core_host_info.containers | length > 0) else "null" }}'
+    tenderhellar_container_id: '{{ tenderhellar_host_info.containers[0].Id if (tenderhellar_host_info.containers | length > 0) else "null" }}'
+
+- name: Load common filebeat config
+  ansible.builtin.include_vars:
+    file: common.yml
+
+- name: Load core input config
+  ansible.builtin.include_vars:
+    file: core.yml
+
+- name: Load tenderhellar input config
+  ansible.builtin.include_vars:
+    file: tenderhellar.yml
+  when: tenderhellar_host_info.containers | length > 0
+
+- name: Load drive input config
+  ansible.builtin.include_vars:
+    file: drive.yml
+  when: drive_host_info.containers | length > 0
+
+- name: Merge drive and tenderhellar input configs
+  ansible.builtin.set_fact:
+    platform_filebeat_inputs: "{{ [platform_filebeat_inputs, drive_filebeat_inputs] | community.general.lists_mergeby('index') }}"
+  when: platform_filebeat_inputs is defined and drive_filebeat_inputs is defined
+
+- name: Merge platform and core input configs
+  ansible.builtin.set_fact:
+    filebeat_inputs: "{{ [filebeat_inputs, platform_filebeat_inputs] | community.general.lists_mergeby('index') }}"
+  when: platform_filebeat_inputs is defined
+
+- name: Set up filebeat log monitoring
+  ansible.builtin.include_role:
+    name: geerlingguy.filebeat

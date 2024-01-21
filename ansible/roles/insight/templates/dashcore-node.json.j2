@@ -1,0 +1,25 @@
+{
+  "network": "{{ 'mainnet' if hellar_network == 'mainnet' else 'testnet' }}",
+  "port": 3001,
+  "services": [
+    "hellard",
+    "@hellarcore/insight-api",
+    {% if ui %}"@hellarcore/insight-ui",{% endif %}
+    "web"
+  ],
+  "servicesConfig": {
+    "hellard": {
+      "connect": [{
+        "rpchost": "{{ private_ip }}",
+        "rpcport": {{ hellard_rpc_port }},
+        "rpcuser": "{{ hellard_rpc_user }}",
+        "rpcpassword": "{{ hellard_rpc_password }}",
+        "zmqpubrawtx": "tcp://{{ private_ip }}:{{ hellard_zmq_port }}",
+        "zmqpubhashblock": "tcp://{{ private_ip }}:{{ hellard_zmq_port }}"
+      }]
+    },
+    "@hellarcore/insight-api": {
+      "disableRateLimiter": true
+    }
+  }
+}

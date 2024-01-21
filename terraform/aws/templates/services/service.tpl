@@ -1,0 +1,1 @@
+   - ${name}${substr("              ", 0, 16 - length(name))}{{ip}}:${port}

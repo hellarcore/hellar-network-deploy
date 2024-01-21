@@ -1,0 +1,125 @@
+# general
+
+{% if hellar_network == 'regtest' %}
+regtest=1
+{% elif hellar_network == 'testnet' %}
+testnet=1
+{% elif hellar_network == 'devnet' %}
+devnet={{ hellar_devnet_name }}
+{% endif %}
+
+daemon=0  # leave this set to 0 for Docker
+logtimestamps=1
+maxconnections=256
+debug={% if masternode.debug is defined or hellard_debug == 1 %}1{% else %}0{% endif %}
+
+uacomment=dcg-{{ inventory_hostname }}
+
+printtoconsole=1
+
+fallbackfee=0.00001
+
+{% if hellard_indexes %}
+# optional indices (required for Insight)
+txindex=1
+addressindex=1
+timestampindex=1
+spentindex=1
+{% endif %}
+
+{% if hellard_zmq %}
+# ZeroMQ notifications
+zmqpubrawtx=tcp://0.0.0.0:{{ hellard_zmq_port }}
+zmqpubrawtxlock=tcp://0.0.0.0:{{ hellard_zmq_port }}
+zmqpubrawblock=tcp://0.0.0.0:{{ hellard_zmq_port }}
+zmqpubhashblock=tcp://0.0.0.0:{{ hellard_zmq_port }}
+zmqpubrawchainlocksig=tcp://0.0.0.0:{{ hellard_zmq_port }}
+zmqpubrawtxlocksig=tcp://0.0.0.0:{{ hellard_zmq_port }}
+{% endif %}
+
+# JSONRPC
+server=1
+rpcuser={{ hellard_rpc_user }}
+rpcpassword={{ hellard_rpc_password }}
+deprecatedrpc=hpmn
+
+{% if hellard_rpc_allow_public %}
+rpcallowip=::/0
+rpcallowip=0.0.0.0/0
+{% else %}
+rpcallowip={{ hellard_private_cidr }}
+rpcallowip=127.0.0.0
+rpcallowip=172.16.0.0/12
+rpcallowip=192.168.0.0/16
+rpcallowip={{ hostvars['vpn'].public_ip }}/32
+{% endif %}
+
+rpcworkqueue=64
+rpcthreads=16
+
+{% if hellard_listen %}
+listen=1
+{% else %}
+listen=0
+{% endif %}
+
+externalip={{ hellard_externalip }}
+
+{% if 'mixer' in inventory_hostname %}
+coinjoinmultisession=1
+coinjoinsessions=10
+coinjoinrounds={{ coinjoin_rounds }}
+{% endif %}
+
+dnsseed=0
+allowprivatenet={{ hellard_allowprivatenet }}
+
+{% if masternode is defined %}
+masternodeblsprivkey={{ masternode.operator.private_key }}
+{% endif %}
+
+{% if hellard_sporkaddr is defined %}
+sporkaddr={{ hellard_sporkaddr }}
+{% endif %}
+{% if hellard_sporkkey is defined %}
+sporkkey={{ hellard_sporkkey }}
+{% endif %}
+
+{% if hellar_network == 'regtest' %}
+[regtest]
+{% elif hellar_network == 'mainnet' %}
+[main]
+{% elif hellar_network == 'testnet' %}
+[test]
+{% elif hellar_network == 'devnet' %}
+llmqchainlocks=llmq_devnet
+llmqinstantsend=llmq_devnet
+llmqinstantsenddip0024=llmq_devnet_dip0024
+llmqplatform=llmq_devnet_platform
+
+[devnet]
+minimumdifficultyblocks={{ hellard_minimumdifficultyblocks }}
+highsubsidyblocks=500
+highsubsidyfactor=10
+{% if hellard_powtargetspacing is defined %}
+powtargetspacing={{ hellard_powtargetspacing }}
+{% endif %}
+{% endif %}
+
+{% if hellard_debug == 1 %}
+logips=1
+{% endif %}
+
+rpcport={{ hellard_rpc_port }}
+rpcbind=0.0.0.0
+
+# external network
+{% if hellard_listen %}
+bind=0.0.0.0
+{% endif %}
+
+port={{ hellard_port }}
+
+{% for seed_node in groups.seed_nodes %}
+addnode={{ hostvars[seed_node]["public_ip"] }}:{{ hellard_port }}
+{% endfor %}

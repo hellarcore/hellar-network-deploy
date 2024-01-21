@@ -1,0 +1,52 @@
+---
+
+- name: Create tenderhellar dir
+  ansible.builtin.file:
+    path: '{{ tenderhellar_compose_path }}'
+    state: directory
+    recurse: true
+
+- name: Copy files
+  ansible.builtin.template:
+    src: '{{ item }}.j2'
+    dest: '{{ tenderhellar_compose_path }}/{{ item }}'
+    mode: "0644"
+  loop:
+    - docker-compose.yml
+
+- name: Create tenderhellar config dir
+  ansible.builtin.file:
+    path: '{{ tenderhellar_compose_path }}/tenderhellar/config'
+    state: directory
+    owner: '{{ tenderhellar_uid }}'
+    group: '{{ tenderhellar_gid }}'
+    mode: "0750"
+
+- name: Create tenderhellar data dir
+  ansible.builtin.file:
+    path: '{{ tenderhellar_compose_path }}/tenderhellar/data'
+    state: directory
+    owner: '{{ tenderhellar_uid }}'
+    group: '{{ tenderhellar_gid }}'
+    mode: "0750"
+
+- name: Create tenderhellar configs
+  vars:
+    template_bootstrap_peers: "{{ groups.seed_nodes | reject('equalto', inventory_hostname) }}"
+  ansible.builtin.template:
+    src: 'roles/tenderhellar/templates/tenderhellar/{{ item }}.j2'
+    dest: '{{ tenderhellar_compose_path }}/tenderhellar/config/{{ item }}'
+    owner: '{{ tenderhellar_uid }}'
+    group: '{{ tenderhellar_gid }}'
+    mode: "0644"
+  loop:
+    - config.toml
+    - genesis.json
+    - node_key.json
+
+- name: Start tenderhellar
+  community.docker.docker_compose:
+    project_src: '{{ tenderhellar_compose_path }}'
+    state: present
+    restarted: true
+    pull: true

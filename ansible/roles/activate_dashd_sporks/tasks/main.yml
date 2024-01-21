@@ -1,0 +1,32 @@
+---
+
+- name: Get current block height
+  ansible.builtin.command: hellar-cli getblockcount
+  register: blocks_count
+  changed_when: blocks_count | int != 0
+
+- name: Activate DML by generating blocks up to height {{ spork_ready_block_height }}
+  ansible.builtin.include_role:
+    name: generate_blocks
+  vars:
+    generate: blocks
+    num_blocks: "{{ spork_ready_block_height - (blocks_count.stdout | int) }}"
+  when: (blocks_count.stdout | int) < spork_ready_block_height
+
+- name: Get active sporks list
+  ansible.builtin.command: hellar-cli spork active
+  register: active_sporks
+  changed_when: active_sporks | length > 0
+
+- name: Activate non active sporks
+  ansible.builtin.command: hellar-cli sporkupdate {{ item }} 0
+  register: spork_update
+  with_items:
+    - SPORK_2_INSTANTSEND_ENABLED
+    - SPORK_3_INSTANTSEND_BLOCK_FILTERING
+    - SPORK_9_SUPERBLOCKS_ENABLED
+    - SPORK_17_QUORUM_DKG_ENABLED
+    - SPORK_19_CHAINLOCKS_ENABLED
+    - SPORK_21_QUORUM_ALL_CONNECTED
+  when: not (active_sporks.stdout | from_json)[item]
+  changed_when: spork_update.stdout == "success"

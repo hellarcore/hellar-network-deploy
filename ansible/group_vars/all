@@ -1,0 +1,176 @@
+---
+# Install Prolution Masternode services
+pro_services: false
+
+node_environment: "production"
+
+# List of identities separated by comma
+platform_dpns_contract_id: ""
+platform_dpns_contract_block_height: ""
+platform_dpns_top_level_domain_identity: ""
+platform_hellarcore_contract_id: ""
+platform_hellarcore_contract_block_height: ""
+platform_feature_flags_contract_id: ""
+platform_feature_flags_contract_block_height: ""
+platform_feature_flags_top_level_identity: ""
+
+platform_initial_core_chain_locked_height: ""
+
+# Install OpenVPN
+openvpn_enabled: true
+
+# Drive
+drive_image: hellarcore/drive
+drive_log_stdout_level: info
+drive_log_pretty_file_level: silent
+drive_log_json_file_level: silent
+drive_log_grovedb_operations: false
+platform_drive_validator_set_llmq_type:
+
+core_llmq_types:
+    1: llmq_50_60
+    2: llmq_400_60
+    3: llmq_400_85
+    4: llmq_100_67
+    5: llmq_60_75
+    6: llmq_25_67
+    100: llmq_test
+    101: llmq_devnet
+    102: llmq_test_v17
+
+# Tenderhellar
+tendermint_image: hellarcore/tenderhellar
+tendermint_p2p_port: 36656
+tendermint_rpc_port: 36657
+tenderhellar_uid: "100"
+tenderhellar_gid: "1000"
+
+tenderhellar_log_level: debug
+
+tenderhellar_compose_project_name: tenderhellar
+tenderhellar_compose_path: '{{ hellard_home }}/{{ tenderhellar_compose_project_name }}'
+
+# hapi
+hapi_image: hellarcore/hapi
+hapi_envoy_image: envoyproxy/envoy
+hapi_port: 1443
+
+# Insight
+insight_image: hellarcore/insight
+insight_api_image: hellarcore/insight-api
+insight_port: 3001
+
+# Multifaucet
+multifaucet_image: hellarcore/multifaucet:latest
+
+# hellarcore Docker image
+hellard_image: hellarcore/hellard
+
+system_users:
+- user: "ubuntu"
+  group: "ubuntu"
+  dir: "/home/ubuntu"
+- user: "root"
+  group: "root"
+  dir: "/root"
+
+hellard_user: hellar
+hellard_group: hellar
+hellard_home: /hellar
+
+# hellar_network:
+# hellar_devnet_name:
+# hellar_network_name:
+
+hellard_port: 20001
+
+# hellarcore RPC settings
+hellard_rpc_allow_public: false
+hellard_rpc_user: hellarrpc
+hellard_rpc_password: password
+hellard_rpc_port: 20002
+
+hellard_zmq_port: 29998
+
+hellard_powtargetspacing: 150
+hellard_minimumdifficultyblocks: 4032
+
+# Example spork address/privkey. Please provide your own spork key in network config:
+# hellard_sporkaddr:
+# hellard_sporkkey:
+
+# Faucet stuff
+
+wallet_rpc_host: '{{ hostvars[groups.wallet_nodes[0]]["private_ip"] }}'
+wallet_rpc_host_name: '{{ hostvars[groups.wallet_nodes[0]]["inventory_hostname"] }}'
+wallet_rpc_port: "{{ hellard_rpc_port }}"
+wallet_rpc_user: "{{ hellard_rpc_user }}"
+wallet_rpc_password: "{{ hellard_rpc_password }}"
+wallet_rpc_wallet_mno: "{{ wallet_rpc_host_name }}-mno"
+wallet_rpc_wallet_faucet: "{{ wallet_rpc_host_name }}-faucet"
+
+faucet_minimum_payout: 10
+faucet_maximum_payout: 10
+faucet_payout_threshold: 100
+faucet_payout_interval: "5m"
+
+# Example faucet address/privkey (provide your own in network config)
+#faucet_address: yhvXpqQjfN9S4j5mBKbxeGxiETJrrLETg5
+#faucet_privkey: cR4t6evwVZoCp1JsLk4wURK4UmBCZzZotNzn9T1mhBT19SH9JtNt
+
+# Miner stuff
+
+miner_rpc_host: "{{ faucet_rpc_host }}"
+miner_rpc_port: "{{ faucet_rpc_port }}"
+miner_rpc_user: "{{ faucet_rpc_user }}"
+miner_rpc_password: "{{ faucet_rpc_password }}"
+miner_payment_address: "{{ faucet_address }}"
+
+# Allow to run miners at 100% by default
+miner_cpu_quota: 100000 # 100%
+
+# Masternode stuff
+
+masternode_wallet_rpc_host: '{{ hostvars[groups.masternode_wallet[0]]["private_ip"] }}'
+masternode_wallet_rpc_port: "{{ hellard_rpc_port }}"
+masternode_wallet_rpc_user: "{{ hellard_rpc_user }}"
+masternode_wallet_rpc_password: "{{ hellard_rpc_password }}"
+masternode_wallet_rpc_args: "-rpcconnect={{ masternode_wallet_rpc_host }} -rpcport={{ masternode_wallet_rpc_port }} -rpcuser={{ masternode_wallet_rpc_user }} -rpcpassword={{ masternode_wallet_rpc_password }}"
+
+masternode_collaterals:
+  mn: 1000
+  hpmn: 4000
+
+# Proposal stuff
+
+governance_proposal_count: 2
+
+# CoinJoin stuff
+coinjoin_amount: 10
+coinjoin_rounds: 12
+
+# Disk space allocated for swap file on each host
+swap_space: 2G
+
+# Elastic stuff
+
+elastic_username: elastic
+elastic_password:
+elastic_version: 8.11.3
+kibana_encryptionkey:
+# Set to 50% of instance memory
+# https://www.elastic.co/guide/en/elasticsearch/guide/current/heap-sizing.html
+elastic_heap_size: 16g
+
+elastic_compose_project_name: elastic
+elastic_path: '{{ hellard_home }}/{{ elastic_compose_project_name }}'
+
+# Fake latency stuff
+
+masternode_network_latency: false
+masternode_network_latency_min: 10
+masternode_network_latency_max: 100
+
+# Hellarmate stuff
+hellarmate_home: /home/hellarmate
+hellarmate_logs_dir: '{{ hellarmate_home }}/logs'

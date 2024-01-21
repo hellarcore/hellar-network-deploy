@@ -1,0 +1,7 @@
+---
+
+- name: Generate hellar.conf file
+  ansible.builtin.template:
+    src: hellar.conf.j2
+    dest: '../networks/{{ hellar_network_name }}.conf'
+    mode: "0644"

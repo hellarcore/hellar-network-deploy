@@ -1,0 +1,5 @@
+{
+  "genesis_time": "{{ genesis_time }}",
+  "chain_id": "hellar-{{ ( 'devnet-' + hellar_devnet_name if hellar_network == 'devnet' else hellar_network ) if tenderhellar_chain_id is not defined else tenderhellar_chain_id }}",
+  "validator_quorum_type": {{ platform_drive_validator_set_llmq_type }}
+}

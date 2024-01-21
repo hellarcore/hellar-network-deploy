@@ -1,0 +1,50 @@
+{
+  "policy": {
+    "phases": {
+      "hot": {
+        "min_age": "0ms",
+        "actions": {
+          "rollover": {
+            "max_size": "20gb",
+            "max_age": "2d"
+          },
+          "set_priority": {
+            "priority": 100
+          }
+        }
+      },
+      "warm": {
+        "actions": {
+          "forcemerge": {
+            "max_num_segments": 1,
+            "index_codec": "best_compression"
+          },
+          "set_priority": {
+            "priority": 50
+          },
+          "migrate": {
+            "enabled": false
+          }
+        }
+      },
+      "cold": {
+        "min_age": "7d",
+        "actions": {
+          "freeze": {},
+          "set_priority": {
+            "priority": 0
+          },
+          "migrate": {
+            "enabled": false
+          }
+        }
+      },
+      "delete": {
+        "min_age": "14d",
+        "actions": {
+          "delete": {}
+        }
+      }
+    }
+  }
+}

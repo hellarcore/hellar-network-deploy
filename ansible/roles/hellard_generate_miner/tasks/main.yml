@@ -1,0 +1,27 @@
+---
+
+- name: Copy hellard-generate-miner script
+  ansible.builtin.template:
+    src: 'hellard-generate-miner.sh.j2'
+    dest: '/usr/local/bin/hellard-generate-miner.sh'
+    owner: root
+    group: root
+    mode: "0755"
+  register: service_result
+
+- name: Create hellard-generate-miner service
+  ansible.builtin.template:
+    src: 'hellard-generate-miner.service.j2'
+    dest: '/etc/systemd/system/hellard-generate-miner.service'
+    owner: root
+    group: root
+    mode: "0644"
+  register: service_result
+
+- name: Enable hellard-generate-miner
+  ansible.builtin.systemd:
+    name: 'hellard-generate-miner'
+    state: restarted
+    enabled: true
+    masked: false
+    daemon_reload: '{{ service_result.changed }}'

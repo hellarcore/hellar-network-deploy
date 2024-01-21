@@ -1,0 +1,10 @@
+[Unit]
+After=network.target
+
+[Service]
+User={{ hellard_user }}
+Group={{ hellard_group }}
+ExecStart=/usr/local/bin/hellard-generate-miner.sh
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,35 @@
+---
+- name: Set vars
+  ansible.builtin.set_fact:
+    hellarmate_selfsigned_ssl_keys_path: "{{ hellarmate_config_dir }}/{{ hellar_network_name }}/platform/hapi/envoy/ssl"
+
+- name: Create hellarmate ssl directory
+  ansible.builtin.file:
+    path: '{{ hellarmate_selfsigned_ssl_keys_path }}'
+    state: directory
+    owner: '{{ hellarmate_user }}'
+    group: '{{ hellarmate_group }}'
+    mode: "0750"
+
+- name: Generate an OpenSSL private key
+  community.crypto.openssl_privatekey:
+    path: '{{ hellarmate_selfsigned_ssl_keys_path }}/private.key'
+    owner: '{{ hellarmate_user }}'
+    group: '{{ hellarmate_group }}'
+
+- name: Generate an OpenSSL Certificate Signing Request
+  community.crypto.openssl_csr:
+    path: '{{ hellarmate_selfsigned_ssl_keys_path }}/bundle.csr'
+    privatekey_path: '{{ hellarmate_selfsigned_ssl_keys_path }}/private.key'
+    common_name: '{{ inventory_hostname }}'
+    owner: '{{ hellarmate_user }}'
+    group: '{{ hellarmate_group }}'
+
+- name: Generate a Self Signed OpenSSL certificate
+  community.crypto.x509_certificate:
+    path: '{{ hellarmate_selfsigned_ssl_keys_path }}/bundle.crt'
+    csr_path: '{{ hellarmate_selfsigned_ssl_keys_path }}/bundle.csr'
+    privatekey_path: '{{ hellarmate_selfsigned_ssl_keys_path }}/private.key'
+    provider: selfsigned
+    owner: '{{ hellarmate_user }}'
+    group: '{{ hellarmate_group }}'

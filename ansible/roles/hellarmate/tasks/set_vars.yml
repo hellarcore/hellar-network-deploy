@@ -1,0 +1,11 @@
+---
+
+- name: Validate configuration
+  ansible.builtin.fail:
+    msg: Either hellarmate_branch or hellarmate_version must be set
+  when: (hellarmate_branch is defined and hellarmate_version is defined) or (hellarmate_branch is not defined and hellarmate_version is not defined)
+
+- name: Set hellarmate vars
+  ansible.builtin.set_fact:
+    hellarmate_cmd: "{{ 'yarn hellarmate' if hellarmate_branch is defined else 'hellarmate' }}"
+    hellarmate_cwd: "{{ hellarmate_source_dir if hellarmate_branch is defined else hellarmate_home }}"

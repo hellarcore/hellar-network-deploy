@@ -1,0 +1,18 @@
+---
+
+hellard_debug: 0
+
+hellard_indexes: false
+hellard_zmq: false
+
+hellard_listen: false
+hellard_externalip: '{{ public_ip }}'
+
+hellard_private_net_prefix: 16
+hellard_private_cidr: '{{ private_ip | ansible.utils.ipsubnet(hellard_private_net_prefix) }}'
+
+# When running devnet/regtest in local networks, we have to allow RFC1918/private addresses
+hellard_allowprivatenet: '{% if hellard_externalip | ansible.utils.ipaddr("private") == hellard_externalip %}1{% else %}0{% endif %}'
+
+hellard_compose_project_name: hellarcore
+hellard_compose_path: '{{ hellard_home }}/{{ hellard_compose_project_name }}'

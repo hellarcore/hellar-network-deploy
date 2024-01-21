@@ -1,0 +1,13 @@
+---
+
+- name: Set vars
+  ansible.builtin.import_tasks: ./set_vars.yml
+
+- name: Reset platform
+  ansible.builtin.command: "{{ hellarmate_cmd }} reset --platform --force --hard"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_reset
+  changed_when: hellarmate_reset.rc == 0

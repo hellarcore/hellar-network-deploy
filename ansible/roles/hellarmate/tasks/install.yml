@@ -1,0 +1,20 @@
+---
+
+- name: Get hellarmate release assets
+  ansible.builtin.uri:
+    url: "https://api.github.com/repos/hellarcore/platform/releases/tags/v{{ hellarmate_version }}"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: release_info
+
+- name: Get package architecture
+  ansible.builtin.command: dpkg --print-architecture
+  register: deb_architecture
+  changed_when: false
+
+- name: Install hellarmate package
+  ansible.builtin.apt:
+    deb: "{{ release_info.json.assets | selectattr('name', 'search', '_' + deb_architecture.stdout + '.deb') | map(attribute='browser_download_url') | first }}"
+    allow_downgrade: true
+  register: hellarmate_install_result

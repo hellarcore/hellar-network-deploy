@@ -1,0 +1,22 @@
+---
+
+- name: Pull hellard image
+  community.docker.docker_image:
+    name: '{{ hellard_image }}'
+    source: pull
+
+- name: Copy hellar-cli from docker container
+  community.docker.docker_container:
+    name: copysource
+    auto_remove: true
+    volumes:
+      - /tmp:/host-tmp
+    image: '{{ hellard_image }}'
+    command: cp /usr/local/bin/hellar-cli /host-tmp/
+
+- name: Install hellar-cli in path
+  ansible.builtin.copy:
+    remote_src: true
+    src: /tmp/hellar-cli
+    dest: /usr/local/bin/hellar-cli
+    mode: "0755"

@@ -1,0 +1,51 @@
+---
+
+# Based on https://hangarau.space/automatically-mounting-an-ebs-volume-using-ansible/
+
+- name: Create mountpoint
+  ansible.builtin.file:
+    path: '{{ data_path }}'
+    state: directory
+    mode: "0755"
+
+- name: Ensure nvme-cli is installed
+  ansible.builtin.apt:
+    name: nvme-cli
+    state: present
+    update_cache: true
+  become: true
+
+- name: Get instance store volume label
+  ansible.builtin.shell: set -o pipefail && sudo nvme list | grep 'Amazon EC2 NVMe Instance Storage' | awk '{ print $1 }'
+  register: elastic_data_block_device
+  changed_when: true
+  args:
+    executable: /bin/bash
+
+- name: Create partition
+  community.general.parted:
+    device: '{{ elastic_data_block_device.stdout }}'
+    number: 1
+    label: gpt
+    name: data
+    state: present
+
+- name: Format partition
+  community.general.filesystem:
+    dev: '{{ elastic_data_block_device.stdout }}p1'
+    fstype: ext4
+
+- name: Mount partition
+  ansible.posix.mount:
+    path: '{{ data_path }}'
+    src: '{{ elastic_data_block_device.stdout }}p1'
+    fstype: ext4
+    state: mounted
+
+- name: Ensure correct permissions
+  ansible.builtin.file:
+    path: '{{ data_path }}'
+    state: directory
+    owner: ubuntu
+    group: root
+    mode: "0755"

@@ -1,0 +1,34 @@
+---
+
+- name: Create Insight dir
+  ansible.builtin.file:
+    path: '{{ insight_path }}'
+    state: directory
+    recurse: true
+
+- name: Copy files
+  ansible.builtin.template:
+    src: '{{ item }}.j2'
+    dest: '{{ insight_path }}/{{ item }}'
+    mode: "0644"
+  loop:
+    - docker-compose.yml
+    - hellarcore-node.json
+    - insight-proxy-nginx.conf
+    - .env
+
+- name: Start Insight
+  community.docker.docker_compose:
+    project_src: '{{ insight_path }}'
+    state: present
+    restarted: true
+    pull: true
+  register: output
+
+- name: Check Insight container
+  ansible.builtin.assert:
+    that: 'output.services.insight.insight.state.running'
+
+- name: Check Insight Proxy container
+  ansible.builtin.assert:
+    that: 'output.services.insight_proxy.insight_proxy.state.running'

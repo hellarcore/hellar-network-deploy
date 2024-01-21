@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+set -ea
+
+. ./lib/cli/utils.sh
+
+CMD_USAGE="Destroy Hellar Network
+
+Usage: destroy [options] <network_name> -t=<target>
+
+Options:
+  -h  --help            - Show help
+  -t, --target=<target> - Specify target, currently supports:
+                          - 'all' to destroy infrastructure
+                          - 'network' to destroy all configs, keeping infrastructure 
+                          - 'platform' to destroy platform only"  
+
+for i in "$@"
+do
+case ${i} in
+    -t*|--target=*)
+    TARGET="${i#*=}"
+    ;;
+    -h|--help)
+        echo "$CMD_USAGE"
+        exit 0
+    ;;
+    *)
+    NETWORK_NAME="${i#*=}"
+    ;;
+esac
+done
+
+declare -a arr=("all" "network" "platform" "logs")
+[[ " ${arr[*]} " =~ " $TARGET " ]] && echo "Destroying $TARGET" || EXIT=1
+
+if [ $EXIT ]; then
+    echo "Target not supported" && echo "$CMD_USAGE"
+    exit 1
+fi
+
+. ./lib/cli/init.sh
+. ./lib/cli/terraform.sh
+. ./lib/cli/ansible.sh
+
+if [ $TARGET == "all" ]; then
+    terraform_run_command "destroy"
+    rm "networks/$NETWORK_NAME.inventory"
+else
+    echo "Removing software and configuration and keeping infrastructure..."
+    ansible_run_playbook "-e target=${TARGET} destroy.yml"
+fi

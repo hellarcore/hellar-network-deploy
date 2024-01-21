@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  hellarcore:
+    image: {{ hellard_image }}
+    user: {{ hellar_user.uid }}:{{ hellar_user.group }}
+    container_name: hellard
+    restart: always
+    # TODO: use standard (bridge) networking
+    network_mode: host
+    #ports:
+    #- 0.0.0.0:{{ hellard_port }}:{{ hellard_port }}
+    #- 127.0.0.1:{{ hellard_rpc_port }}:{{ hellard_rpc_port }}
+    #- 127.0.0.1:{{ hellard_zmq_port }}:{{ hellard_zmq_port }}
+    volumes:
+    - "{{ hellard_home }}:/hellar"
+    - "/etc/hellar.conf:/etc/hellar.conf"
+    command: ["hellard", "-conf=/etc/hellar.conf", "-datadir=/hellar/.hellarcore"]

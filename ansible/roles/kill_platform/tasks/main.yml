@@ -1,0 +1,31 @@
+---
+
+- name: Reset platform (hellarmate)
+  ansible.builtin.import_role:
+    name: hellarmate
+    tasks_from: destroy_platform
+  when: inventory_hostname in groups["hp_masternodes"]
+
+- name: Remove tenderhellar (seeds)
+  community.docker.docker_compose:
+    project_src: '{{ tenderhellar_compose_path }}'
+    state: absent
+  when:
+    - inventory_hostname not in groups["hp_masternodes"]
+
+- name: Delete tenderhellar dir (seeds)
+  ansible.builtin.file:
+    state: absent
+    path: '{{ tenderhellar_compose_path }}'
+  when:
+    - inventory_hostname not in groups["hp_masternodes"]
+
+- name: Remove any remaining docker data
+  community.docker.docker_prune:
+    containers: true
+    images: true
+    images_filters:
+      dangling: false
+    networks: true
+    volumes: true
+    builder_cache: true

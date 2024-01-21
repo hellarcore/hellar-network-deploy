@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+set -ea
+
+# Check Docker
+
+if ! [[ -x "$(command -v docker)" ]]; then
+  echo "Docker is not installed."
+  exit 1
+fi
+
+# Load configuration	
+
+if [[ -f ".env" ]]; then
+    source ".env"
+fi
+
+# Show help if command is not specified
+
+if [[ -z $1 ]]; then
+    echo "Hellar Network Tool
+
+Usage: hellar-network <command>
+
+Commands:
+  deploy    - Deploy or update new network
+  destroy   - Destroy existent network
+  test      - Run smoke test against specific network
+  list      - List network hosts and services
+  hellar-cli  - Execute hellarcore RPC command
+  generate  - Generate configs
+  logs      - Show specific network service logs"
+  exit 0;
+fi
+
+# Run container with specified command
+
+docker run -t --rm \
+           --device /dev/net/tun \
+           --cap-add=NET_ADMIN \
+           -v "$PWD:/networks" \
+           -v "$HOME/.aws:/root/.aws" \
+           -v "$PUBLIC_KEY_PATH:$PUBLIC_KEY_PATH" \
+           -v "$PRIVATE_KEY_PATH:$PRIVATE_KEY_PATH" \
+           hellarcore/hellar-network-deploy:"${DEPLOY_TOOL_VERSION:-latest}" "$@"

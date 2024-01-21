@@ -1,0 +1,134 @@
+---
+
+- name: Set vars
+  ansible.builtin.set_fact:
+    hellarmate_zerossl_keys_path: "{{ hellarmate_config_dir }}/{{ hellar_network_name }}/platform/hapi/envoy/ssl"
+    hellarmate_zerossl_config_path: "platform.hapi.envoy.ssl.providerConfigs.zerossl"
+    hellarmate_zerossl_ssm_path: "/network-deploy/{{ hellar_network_name }}/{{ inventory_hostname }}/zerossl"
+    hellarmate_zerossl_csr_file_name: "csr.pem"
+    hellarmate_zerossl_private_key_file_name: "private.key"
+    hellarmate_zerossl_bundle_file_name: "bundle.crt"
+
+- name: Create hellarmate ssl directory
+  ansible.builtin.file:
+    path: '{{ hellarmate_zerossl_keys_path }}'
+    state: directory
+    owner: '{{ hellarmate_user }}'
+    group: '{{ hellarmate_group }}'
+    mode: "0750"
+
+# Set certificate ID to hellarmate config
+
+- name: Check SSM parameter store for ZeroSSL certificate ID
+  delegate_to: localhost
+  become: false
+  ansible.builtin.set_fact:
+    hellarmate_zerossl_ssm_certificate_id: "{{ lookup('aws_ssm', '{{ hellarmate_zerossl_ssm_path }}-id', on_missing='skip') }}"
+
+- name: Set ZeroSSL certificate ID to hellarmate config from SSM if not set
+  ansible.builtin.command: "{{ hellarmate_cmd }} config set {{ hellarmate_zerossl_config_path }}.id {{ hellarmate_zerossl_ssm_certificate_id }}"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_zerossl_id
+  changed_when: hellarmate_zerossl_id.rc == 0
+  when:
+    - hellarmate_zerossl_ssm_certificate_id != ''
+    - hellarmate_zerossl_config_certificate_id is not defined
+
+# Copy ZeroSSL files if they are not present
+
+- name: Check that ZeroSSL CSR and private key files exist
+  ansible.builtin.stat:
+    path: '{{ hellarmate_zerossl_keys_path }}/{{ hellarmate_zerossl_private_key_file_name }}'
+  register: zero_ssl_files
+
+- name: Get ZeroSSL CSR and private key from SSM
+  ansible.builtin.copy:
+    dest: '{{ hellarmate_zerossl_keys_path }}/{{ item }}'
+    content: "{{ lookup('aws_ssm', '{{ hellarmate_zerossl_ssm_path }}-{{ item }}', on_missing='skip') }}"
+    owner: '{{ hellarmate_user }}'
+    group: '{{ hellarmate_group }}'
+    mode: "0644"
+  loop:
+    - '{{ hellarmate_zerossl_private_key_file_name }}'
+    - '{{ hellarmate_zerossl_csr_file_name }}'
+  when: >
+    not zero_ssl_files.stat.exists and
+    hellarmate_zerossl_ssm_certificate_id != ''
+
+# Create a new ZeroSSL certificate if it is not present
+# or download bundle if it's not exist
+
+- name: Check that ZeroSSL bundle file exists
+  ansible.builtin.stat:
+    path: '{{ hellarmate_zerossl_keys_path }}/{{ hellarmate_zerossl_bundle_file_name }}'
+  register: zero_ssl_bundle_file
+
+- name: Obtain ZeroSSL certificate for hapi
+  ansible.builtin.command: "{{ hellarmate_cmd }} ssl obtain --verbose --no-retry"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_obtain
+  changed_when: hellarmate_obtain.rc == 0
+  when: >
+    hellarmate_zerossl_ssm_certificate_id == '' or
+    not zero_ssl_bundle_file.stat.exists
+
+# Save new ZeroSSL information to SSM
+
+- name: Get new ZeroSSL certificate ID from hellarmate config
+  ansible.builtin.command: "{{ hellarmate_cmd }} config get {{ hellarmate_zerossl_config_path }}.id"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_zerossl_id
+  changed_when: hellarmate_zerossl_id.rc == 0
+  when: hellarmate_obtain is defined and hellarmate_obtain.changed
+
+- name: Set new ZeroSSL certificate ID from config
+  ansible.builtin.set_fact:
+    hellarmate_zerossl_config_certificate_id: "{{ hellarmate_zerossl_id.stdout }}"
+  when: hellarmate_obtain is defined and hellarmate_obtain.changed
+
+- name: Update ZeroSSL certificate ID in AWS SSM parameter store
+  delegate_to: localhost
+  become: false
+  community.aws.ssm_parameter:
+    name: '{{ hellarmate_zerossl_ssm_path }}-id'
+    value: '{{ hellarmate_zerossl_config_certificate_id }}'
+  when: hellarmate_zerossl_ssm_certificate_id != hellarmate_zerossl_config_certificate_id
+
+- name: Read new generated ZeroSSL private key file to variable
+  ansible.builtin.slurp:
+    src: '{{ hellarmate_zerossl_keys_path }}/{{ hellarmate_zerossl_private_key_file_name }}'
+  register: hellarmate_zerossl_private_key_file
+  when: hellarmate_zerossl_ssm_certificate_id != hellarmate_zerossl_config_certificate_id
+
+- name: Read new generated ZeroSSL CSR file to variable
+  ansible.builtin.slurp:
+    src: '{{ hellarmate_zerossl_keys_path }}/{{ hellarmate_zerossl_csr_file_name }}'
+  register: hellarmate_zerossl_csr_file
+  when: hellarmate_zerossl_ssm_certificate_id != hellarmate_zerossl_config_certificate_id
+
+- name: Set new generated ZeroSSL CSR and private key files
+  ansible.builtin.set_fact:
+    hellarmate_zerossl_files:
+      - name: "{{ hellarmate_zerossl_private_key_file_name }}"
+        content: '{{ hellarmate_zerossl_private_key_file.content | b64decode }}'
+      - name: "{{ hellarmate_zerossl_csr_file_name }}"
+        content: '{{ hellarmate_zerossl_csr_file.content | b64decode }}'
+  when: hellarmate_zerossl_ssm_certificate_id != hellarmate_zerossl_config_certificate_id
+
+- name: Update ZeroSSL private key and CSR files in AWS SSM parameter store
+  delegate_to: localhost
+  become: false
+  community.aws.ssm_parameter:
+    name: '{{ hellarmate_zerossl_ssm_path }}-{{ item.name }}'
+    value: '{{ item.content }}'
+  loop: '{{ hellarmate_zerossl_files }}'
+  when: hellarmate_zerossl_ssm_certificate_id != hellarmate_zerossl_config_certificate_id

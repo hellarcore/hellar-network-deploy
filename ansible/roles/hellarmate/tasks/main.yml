@@ -1,0 +1,293 @@
+---
+
+- name: Set vars
+  ansible.builtin.import_tasks: ./set_vars.yml
+
+- name: Create hellarmate group
+  ansible.builtin.group:
+    name: '{{ hellarmate_group }}'
+
+- name: Create hellarmate user
+  ansible.builtin.user:
+    name: '{{ hellarmate_user }}'
+    comment: 'Hellarmate user'
+    group: '{{ hellarmate_group }}'
+    home: '{{ hellarmate_home }}'
+    create_home: true
+    shell: /bin/bash
+    umask: '0002'
+
+- name: Add hellarmate user to docker group
+  ansible.builtin.user:
+    name: 'hellarmate'
+    groups: docker
+    append: true
+
+- name: Write hellar.conf for hellar-cli
+  ansible.builtin.template:
+    src: hellar.conf.j2
+    dest: /etc/hellar.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure users for hellar-cli
+  ansible.builtin.include_role:
+    name: hellar_cli
+    tasks_from: configure_users
+  vars:
+    hellarmate_user_dict:
+      user: '{{ hellarmate_user }}'
+      group: '{{ hellarmate_group }}'
+      dir: '{{ hellarmate_home }}'
+    users: '{{ system_users + [hellarmate_user_dict] }}'
+
+- name: Create logs dir
+  ansible.builtin.file:
+    path: '{{ hellarmate_logs_dir }}'
+    state: directory
+    owner: '{{ hellarmate_user }}'
+    group: '{{ hellarmate_group }}'
+    recurse: true
+
+- name: Configure log rotation
+  ansible.builtin.include_role:
+    name: arillso.logrotate
+  vars:
+    logrotate_applications:
+      - name: platform-logs
+        definitions:
+          - logs:
+              - '{{ hellarmate_logs_dir }}/*.log'
+            options:
+              - rotate 7
+              - daily
+              - maxsize 1G
+              - missingok
+              - notifempty
+              - copytruncate
+              - compress
+              - delaycompress
+
+- name: Ensure logrotate runs hourly under systemd timer
+  ansible.builtin.lineinfile:
+    path: /lib/systemd/system/logrotate.timer
+    regexp: '^OnCalendar=hourly'
+    insertafter: '^OnCalendar=daily'
+    line: OnCalendar=hourly
+
+- name: Create hellarmate config dir
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    owner: '{{ hellarmate_user }}'
+    group: '{{ hellarmate_group }}'
+    mode: '0755'
+  loop:
+    - '{{ hellarmate_config_dir }}'
+
+- name: Build hellarmate
+  ansible.builtin.import_tasks: ./build.yml
+  when: hellarmate_branch is defined
+
+- name: Install hellarmate
+  ansible.builtin.import_tasks: ./install.yml
+  when: hellarmate_version is defined
+
+- name: Retrieve hellarmate version
+  ansible.builtin.command: "{{ hellarmate_cmd }} --version"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_version_result
+  changed_when: hellarmate_version_result.rc == 0
+
+- name: Extract hellarmate version
+  ansible.builtin.set_fact:
+    hellarmate_config_version: "{{ (hellarmate_version_result.stdout | split(' ') | first() | split('/'))[1] }}"
+
+# This check will return an error code if config is missing, config schema is invalid or default config is not yet set
+- name: Check state of hellarmate config
+  ansible.builtin.command: "{{ hellarmate_cmd }} config"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_config_result
+  ignore_errors: true
+  changed_when: true
+
+- name: Get ZeroSSL certificate ID from config
+  ansible.builtin.command: "{{ hellarmate_cmd }} config get platform.hapi.envoy.ssl.providerConfigs.zerossl.id"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_zerossl_id_result
+  changed_when: hellarmate_zerossl_id_result.rc == 0
+  when: hellarmate_config_result.rc == 0
+
+- name: Set ZeroSSL certificate ID from config
+  ansible.builtin.set_fact:
+    hellarmate_zerossl_config_certificate_id: "{{ hellarmate_zerossl_id_result.stdout }}"
+  when: hellarmate_config_result.rc == 0 and hellarmate_zerossl_id_result.stdout != 'null'
+
+- name: Write hellarmate config file
+  vars:
+    template_bootstrap_peers: "{{ groups.seed_nodes }}"
+  ansible.builtin.template:
+    src: hellarmate.json.j2
+    dest: '{{ hellarmate_config_dir }}/config.json'
+    owner: '{{ hellarmate_user }}'
+    group: '{{ hellarmate_group }}'
+    mode: "0644"
+  register: template_result
+
+# We need to modify any config option to force hellarmate render service configs
+- name: Render service configs
+  ansible.builtin.command: "{{ hellarmate_cmd }} config set hellarmate.helper.api.enable true"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_render_configs_result
+  changed_when: hellarmate_render_configs_result.rc == 0
+
+- name: Generate self-signed SSL certificate for hapi
+  ansible.builtin.import_tasks: ./ssl/self_signed.yml
+  when: hellarmate_platform_enable and hellarmate_platform_hapi_envoy_ssl_provider == 'self-signed'
+
+- name: Obtain ZeroSSL certificate for hapi
+  ansible.builtin.import_tasks: ./ssl/zerossl.yml
+  when: hellarmate_platform_enable and hellarmate_platform_hapi_envoy_ssl_provider == 'zerossl'
+
+- name: Export current hellarmate config
+  ansible.builtin.shell: "{{ hellarmate_cmd }} config envs > {{ hellarmate_home }}/.env"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_envs
+  changed_when: hellarmate_envs.rc == 0
+
+- name: Update hellarmate images
+  ansible.builtin.command: "{{ hellarmate_cmd }} update --format=json"
+  become: true
+  become_user: hellarmate
+  register: hellarmate_update
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  changed_when: hellarmate_update.rc == 0
+
+- name: Get service statuses
+  ansible.builtin.command: "{{ hellarmate_cmd }} status services --format=json"
+  become: true
+  become_user: hellarmate
+  changed_when: hellarmate_services_status.rc == 0
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_services_status
+
+- name: Set facts
+  ansible.builtin.set_fact:
+    is_core_started: >-
+      {{
+        hellarmate_services_status.stdout |
+        from_json |
+        json_query('[?service==`core`&&status!=`not_started`]') |
+        length | int > 0
+      }}
+    is_platform_started: >-
+      {{
+        hellarmate_services_status.stdout |
+        from_json |
+        json_query('[?service!=`core`&&status!=`not_started`]') |
+        length | int > 0
+      }}
+    is_core_images_updated: >-
+      {{
+        hellarmate_update.stdout |
+        from_json |
+        json_query('[?name==`core`]') |
+        sort(attribute='updated', reverse=true) |
+        first() |
+        json_query('updated')
+      }}
+    is_platform_images_updated: >-
+      {{
+        hellarmate_update.stdout |
+        from_json |
+        json_query('[?name!=`core`]') |
+        sort(attribute='updated', reverse=true) |
+        first() |
+        json_query('updated')
+      }}
+    is_hellarmate_package_changed: "{{ hellarmate_install_result.changed }}"
+    is_hellarmate_config_changed: "{{ template_result.changed }}"
+
+- name: Print status
+  ansible.builtin.debug:
+    msg: "\nCore Started: {{ is_core_started }}
+          \nPlatform Started: {{ is_platform_started }}
+          \nCore Images Updated: {{ is_core_images_updated }}
+          \nPlatform Images Updated: {{ is_platform_images_updated }}
+          \nHellarmate Package Updated: {{ is_hellarmate_package_changed }}
+          \nHellarmate Config Changed: {{ is_hellarmate_config_changed }}"
+
+# Start logic:
+# start ALL when (core is down and platform is down)
+# start platform when (core is up and platform is down)
+
+# Start all if everything is stopped (not started yet)
+- name: Start all hellarmate services
+  ansible.builtin.command: "{{ hellarmate_cmd }} start --verbose"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_start_all
+  when:
+    - not is_core_started
+    - not is_platform_started
+  changed_when: hellarmate_start_all.rc == 0
+
+# Restart logic
+# hellarmate version is changed => restart all
+# hellarmate config is changed => restart all
+
+- name: Restart all hellarmate services
+  ansible.builtin.command: "{{ hellarmate_cmd }} restart --verbose"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_restart_all
+  when:
+    - not hellarmate_start_all.changed
+    - is_hellarmate_package_changed or is_hellarmate_config_changed
+  changed_when: hellarmate_restart_all.rc == 0
+
+# Force start logic
+# Force start is equivalent to `docker compose up` and will replace services that have changed
+
+- name: Start not started services and replace updated services
+  ansible.builtin.command: "{{ hellarmate_cmd }} start --force --verbose"
+  become: true
+  become_user: hellarmate
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  register: hellarmate_force_start
+  when:
+    - not hellarmate_start_all.changed
+    - not hellarmate_restart_all.changed
+  changed_when: hellarmate_force_start.rc == 0
+
+- name: Disable hellarmate helper build
+  ansible.builtin.command: "{{ hellarmate_cmd }} config set hellarmate.helper.docker.build.enabled false"
+  become: true
+  become_user: hellarmate
+  register: build_hellarmate_helper
+  args:
+    chdir: '{{ hellarmate_cwd }}'
+  changed_when: build_hellarmate_helper.rc == 0

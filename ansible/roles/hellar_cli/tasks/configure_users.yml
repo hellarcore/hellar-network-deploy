@@ -1,0 +1,18 @@
+---
+
+- name: Create .hellarcore directory for each user
+  ansible.builtin.file:
+    path: '{{ item.dir }}/.hellarcore'
+    state: directory
+    mode: "0755"
+    owner: '{{ item.user }}'
+    group: '{{ item.group }}'
+  loop: '{{ users }}'
+
+- name: Symlink hellar.conf to user hellarmate directory to make rpc work
+  ansible.builtin.file:
+    path: '{{ item.dir }}/.hellarcore/hellar.conf'
+    src: '/etc/hellar.conf'
+    state: link
+    force: true
+  loop: '{{ users }}'

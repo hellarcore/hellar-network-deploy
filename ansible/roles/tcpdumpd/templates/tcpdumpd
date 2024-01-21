@@ -1,0 +1,7 @@
+/hellar/tcpdumpd/*.pcap {
+        hourly
+        missingok
+        rotate 30
+        compress
+        notifempty
+}

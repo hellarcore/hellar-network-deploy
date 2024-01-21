@@ -1,0 +1,16 @@
+---
+
+- name: Delete hellarmate config dir
+  ansible.builtin.file:
+    state: absent
+    path: "{{ hellarmate_config_dir }}/"
+
+- name: Delete hellarmate logs dir
+  ansible.builtin.file:
+    state: absent
+    path: "{{ hellarmate_logs_dir }}/"
+
+- name: Delete hellarmate source dir
+  ansible.builtin.file:
+    state: absent
+    path: "{{ hellarmate_source_dir }}/"

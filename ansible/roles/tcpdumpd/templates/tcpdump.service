@@ -1,0 +1,12 @@
+[Unit]
+After=network.target
+ 
+[Service]
+Restart=always
+RestartSec=30
+ExecStartPre=/bin/mkdir -p /hellar/tcpdumpd/
+ExecStart=/usr/sbin/tcpdump -i any -v port 20001 -W 10 -C 100 -w /hellar/tcpdumpd/hellardump.pcap
+ExecStop=/bin/kill -s QUIT $MAINPID
+ 
+[Install]
+WantedBy=multi-user.target

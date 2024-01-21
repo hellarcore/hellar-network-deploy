@@ -1,0 +1,9 @@
+#!/bin/bash
+
+result=$(hellar-cli getbalances)
+coinjoin_value=$(echo "$result" | jq '.mine.coinjoin')
+
+# Check if coinjoin_value is greater than remix_amount (default 30)
+if (( $(echo "$coinjoin_value > {{ remix_amount }}" | bc -l) )); then
+    hellar-cli sendtoaddress {{ mixers[inventory_hostname].owner.address }} {{ remix_amount }} "" "" true true true 2>&1 | /hellar/timestamp.sh >> /hellar/remix.cron.log
+fi
