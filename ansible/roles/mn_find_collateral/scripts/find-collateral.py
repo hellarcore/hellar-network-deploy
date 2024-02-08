@@ -33,7 +33,7 @@ utxos = unspent
 for u in addressutxos:
     e = {
         "txid": u.get('txid'),
-        "amount": u.get('satoshis') / coin,
+        "amount": u.get('hellars') / coin,
         "vout": u.get('outputIndex'),
         "confirmations": tipHeight - u.get('height')
     }
